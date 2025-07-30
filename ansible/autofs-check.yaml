@@ -1,0 +1,81 @@
+---
+- name: Ensure autofs is configured with required flags
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  vars:
+    desired_flags: "--timeout=60 --ghost"
+    backup_suffix: ".bak_{{ ansible_date_time.iso8601_basic_short }}"
+
+  tasks:
+
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Set autofs_installed variable
+      ansible.builtin.set_fact:
+        autofs_installed: "{{ 'autofs' in ansible_facts.packages }}"
+
+    - name: Skip playbook if autofs is not installed
+      ansible.builtin.debug:
+        msg: "Autofs is not installed. Skipping configuration tasks."
+      when: not autofs_installed
+
+    - name: Backup /etc/auto.master before modification
+      ansible.builtin.copy:
+        src: /etc/auto.master
+        dest: "/etc/auto.master{{ backup_suffix }}"
+        remote_src: yes
+      when: autofs_installed
+
+    - name: Read /etc/auto.master
+      ansible.builtin.slurp:
+        src: /etc/auto.master
+      register: auto_master_content
+      when: autofs_installed
+
+    - name: Decode /etc/auto.master content
+      ansible.builtin.set_fact:
+        auto_master_text: "{{ auto_master_content.content | b64decode }}"
+      when: autofs_installed
+
+    - name: Ensure --timeout and --ghost flags on active mount lines
+      ansible.builtin.set_fact:
+        new_auto_master: >-
+          {{
+            auto_master_text.splitlines() | map('regex_replace', 
+              '^(?!#)(.*)(--timeout[=\\s]*\\d+)?(.*)(--ghost)?(.*)$',
+              lambda m: (
+                m.group(1) ~
+                (' --timeout=60' if not m.group(2)) ~
+                m.group(3) ~
+                (' --ghost' if not m.group(4)) ~
+                m.group(5)
+              ) if '--timeout' not in m.string or '--ghost' not in m.string else m.string
+            ) | join('\n') ~ '\n'
+          }}
+      when: autofs_installed
+
+    - name: Update /etc/auto.master if necessary
+      ansible.builtin.copy:
+        dest: /etc/auto.master
+        content: "{{ new_auto_master }}"
+        owner: root
+        group: root
+        mode: '0644'
+      when: autofs_installed and auto_master_text != new_auto_master
+
+    - name: Restart autofs if changes were made
+      ansible.builtin.service:
+        name: autofs
+        state: restarted
+      when: autofs_installed and auto_master_text != new_auto_master
+
+    - name: Show result if autofs was installed
+      ansible.builtin.debug:
+        msg: >-
+          /etc/auto.master checked and updated if necessary.
+          Backup: /etc/auto.master{{ backup_suffix }}
+      when: autofs_installed
