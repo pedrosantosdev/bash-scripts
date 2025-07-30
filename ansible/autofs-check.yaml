@@ -2,7 +2,7 @@
 - name: Ensure autofs is configured with required flags
   hosts: all
   become: yes
-  gather_facts: no
+  gather_facts: yes
 
   vars:
     desired_flags: "--timeout=60 --ghost"
