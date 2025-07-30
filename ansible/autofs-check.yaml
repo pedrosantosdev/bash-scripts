@@ -50,29 +50,37 @@
           import re
 
           def is_mount_entry(line):
-              """Verifica se a linha é uma entrada de montagem válida"""
-              # Remove comentários inline se existirem
+              """Check if line is a valid mount entry"""
+              # Skip comments and empty lines
+              if not line.strip() or line.strip().startswith('#') or line.strip().startswith('+'):
+                  return False
+              
+              # Remove inline comments if they exist
               line = line.split('#')[0].strip()
               parts = line.split()
-              # Deve começar com / e ter pelo menos 1 campos
+              
+              # Must start with / and have at least 1 fields (mount-point and map)
               return len(parts) >= 1 and parts[0].startswith('/')
 
           def add_missing_flags(line):
-              """Adiciona flags ausentes apenas em entradas de montagem"""
+              """Add missing flags only to mount entries"""
               if not is_mount_entry(line):
                   return line
                   
-              # Remove comentários inline preservando-os
+              # Preserve inline comments
               main_part, *comments = line.split('#', 1)
               parts = main_part.split()
               
-              # Adiciona flags apenas se não existirem
-              if "--timeout" not in main_part:
-                  parts.append("--timeout=60")
-              if "--ghost" not in main_part:
-                  parts.append("--ghost")
+              # Check existing flags and add missing ones
+              has_timeout = any('--timeout=' in part for part in parts)
+              has_ghost = '--ghost' in main_part
+              
+              if not has_timeout:
+                  parts.append('--timeout=60')
+              if not has_ghost:
+                  parts.append('--ghost')
                   
-              # Reconstrói a linha com comentários se existirem
+              # Rebuild line with preserved comments
               result = ' '.join(parts)
               if comments:
                   result += ' #' + comments[0]
@@ -86,7 +94,9 @@
 
               lines = content.splitlines()
               processed_lines = [add_missing_flags(line) for line in lines]
-              print('\n'.join(processed_lines))
+              
+              # Ensure final newline
+              print('\n'.join(processed_lines) + '\n')
 
           if __name__ == "__main__":
               try:
