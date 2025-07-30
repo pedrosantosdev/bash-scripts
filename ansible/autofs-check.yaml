@@ -45,16 +45,13 @@
       ansible.builtin.set_fact:
         new_auto_master: >-
           {{
-            auto_master_text.splitlines() | map('regex_replace', 
-              '^(?!#)(.*)(--timeout[=\\s]*\\d+)?(.*)(--ghost)?(.*)$',
-              lambda m: (
-                m.group(1) ~
-                (' --timeout=60' if not m.group(2)) ~
-                m.group(3) ~
-                (' --ghost' if not m.group(4)) ~
-                m.group(5)
-              ) if '--timeout' not in m.string or '--ghost' not in m.string else m.string
-            ) | join('\n') ~ '\n'
+            auto_master_text.splitlines()
+            | map('regex_replace', '^(?!#)(.*)$',
+                '\\1'
+                ~ '{% if "--timeout" not in "\\1" %} --timeout=60{% endif %}'
+                ~ '{% if "--ghost" not in "\\1" %} --ghost{% endif %}'
+            )
+            | join('\n')
           }}
       when: autofs_installed
 
