@@ -41,34 +41,44 @@
         auto_master_text: "{{ auto_master_content.content | b64decode }}"
       when: autofs_installed
 
-    - name: Ensure --timeout and --ghost flags on active mount lines
-      ansible.builtin.set_fact:
-        new_auto_master: >-
-          {{
-            auto_master_text.splitlines()
-            | map('regex_replace', '^(?!#)(.*)$',
-                '\\1'
-                ~ '{% if "--timeout" not in "\\1" %} --timeout=60{% endif %}'
-                ~ '{% if "--ghost" not in "\\1" %} --ghost{% endif %}'
-            )
-            | join('\n')
-          }}
+    - name: Fix flags in /etc/auto.master using Python script
+      ansible.builtin.copy:
+        dest: /tmp/fix_auto_master.py
+        content: |
+          import sys
+          lines = sys.stdin.read().splitlines()
+          for line in lines:
+              if line.startswith("#") or not line.strip():
+                  print(line)
+                  continue
+              if "--timeout" not in line:
+                  line += " --timeout=60"
+              if "--ghost" not in line:
+                  line += " --ghost"
+              print(line)
+      when: autofs_installed
+
+    - name: Generate new_auto_master using Python script
+      ansible.builtin.command:
+        cmd: python3 /tmp/fix_auto_master.py
+        stdin: "{{ auto_master_text }}"
+      register: fixed_auto_master
       when: autofs_installed
 
     - name: Update /etc/auto.master if necessary
       ansible.builtin.copy:
         dest: /etc/auto.master
-        content: "{{ new_auto_master }}"
+        content: "{{ fixed_auto_master.stdout }}"
         owner: root
         group: root
         mode: '0644'
-      when: autofs_installed and auto_master_text != new_auto_master
+      when: autofs_installed and auto_master_text != fixed_auto_master.stdout
 
     - name: Restart autofs if changes were made
       ansible.builtin.service:
         name: autofs
         state: restarted
-      when: autofs_installed and auto_master_text != new_auto_master
+      when: autofs_installed and auto_master_text != fixed_auto_master.stdout
 
     - name: Show result if autofs was installed
       ansible.builtin.debug:
