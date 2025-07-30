@@ -96,7 +96,7 @@
               processed_lines = [add_missing_flags(line) for line in lines]
               
               # Ensure final newline
-              print('\n'.join(processed_lines) + '\n')
+              print('\n'.join(processed_lines) + '\n\n')
 
           if __name__ == "__main__":
               try:
