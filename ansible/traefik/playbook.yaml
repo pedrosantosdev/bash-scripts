@@ -1,5 +1,6 @@
-- name: Generate Traefik config
-  hosts: localhost
+- name: Generate Traefik dynamic config on host
+  hosts: traefik
+  become: true
 
 
   tasks:
@@ -9,10 +10,26 @@
           - base_domain is defined
           - caddy_url is defined
           - apps is defined
-        fail_msg: "Variáveis obrigatórias não definidas no Semaphore"
 
 
-    - name: Render dynamic.yml
+    - name: Ensure conf.d exists
+      file:
+        path: /etc/traefik/conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+
+    - name: Render services.yaml directly on Traefik host
       template:
         src: traefik_dynamic.yml.j2
-        dest: ../output/dynamic.yml
+        dest: /etc/traefik/conf.d/services.yaml
+        owner: root
+        group: root
+        mode: "0644"
+
+
+    - name: Validate Traefik config (opcional)
+      command: traefik check-config
+      ignore_errors: yes

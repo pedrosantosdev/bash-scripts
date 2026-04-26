@@ -27,4 +27,5 @@ http:
       loadBalancer:
         servers:
           - url: "{{ app.service_url }}"
+          passHostHeader: true
 {% endfor %}
