@@ -1,0 +1,18 @@
+- name: Generate Traefik config
+  hosts: localhost
+
+
+  tasks:
+    - name: Validate required vars
+      assert:
+        that:
+          - base_domain is defined
+          - caddy_url is defined
+          - apps is defined
+        fail_msg: "Variáveis obrigatórias não definidas no Semaphore"
+
+
+    - name: Render dynamic.yml
+      template:
+        src: traefik_dynamic.yml.j2
+        dest: ../output/dynamic.yml
