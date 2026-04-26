@@ -3,14 +3,14 @@ http:
 {% for app in apps %}
     {{ app.name }}-ext:
       entryPoints: ["websecure"]
-      rule: "Host(`{{ app.subdomain }}.{{ base_domain }}`)"
+      rule: "Host({% for d in domains %}`{{ app.subdomain }}.{{ d }}`{% if not loop.last %}, {% endif %}{% endfor %})"
       service: "waf"
       tls: {}
 
 
     {{ app.name }}-int:
       entryPoints: ["waf_in"]
-      rule: "Host(`{{ app.subdomain }}.{{ base_domain }}`)"
+      rule: "Host({% for d in domains %}`{{ app.subdomain }}.{{ d }}`{% if not loop.last %}, {% endif %}{% endfor %})"
       service: "{{ app.name }}-svc"
 {% endfor %}
 
@@ -20,6 +20,7 @@ http:
       loadBalancer:
         servers:
           - url: "{{ caddy_url }}"
+          passHostHeader: true
 
 
 {% for app in apps %}
