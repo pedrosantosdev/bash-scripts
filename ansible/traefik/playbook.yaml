@@ -1,35 +1,32 @@
-- name: Generate Traefik dynamic config on host
-  hosts: traefik
-  become: true
+http:
+  routers:
+{% for app in apps %}
+    {{ app.name }}-ext:
+      entryPoints: ["websecure"]
+      rule: "Host({% for d in domains %}`{{ app.subdomain }}.{{ d }}`{% if not loop.last %}, {% endif %}{% endfor %})"
+      service: "waf"
+      tls: {}
 
 
-  tasks:
-    - name: Validate required vars
-      assert:
-        that:
-          - base_domain is defined
-          - caddy_url is defined
-          - apps is defined
+    {{ app.name }}-int:
+      entryPoints: ["waf_in"]
+      rule: "Host({% for d in domains %}`{{ app.subdomain }}.{{ d }}`{% if not loop.last %}, {% endif %}{% endfor %})"
+      service: "{{ app.name }}-svc"
+{% endfor %}
 
 
-    - name: Ensure conf.d exists
-      file:
-        path: /etc/traefik/conf.d
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
+  services:
+    waf:
+      loadBalancer:
+        servers:
+          - url: "{{ caddy_url }}"
+          passHostHeader: true
 
 
-    - name: Render services.yaml directly on Traefik host
-      template:
-        src: traefik_dynamic.yml.j2
-        dest: /etc/traefik/conf.d/services.yaml
-        owner: root
-        group: root
-        mode: "0644"
-
-
-    - name: Validate Traefik config (opcional)
-      command: traefik check-config
-      ignore_errors: yes
+{% for app in apps %}
+    {{ app.name }}-svc:
+      loadBalancer:
+        servers:
+          - url: "{{ app.service_url }}"
+          passHostHeader: true
+{% endfor %}
