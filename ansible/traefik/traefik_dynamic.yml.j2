@@ -19,14 +19,14 @@ http:
     waf:
       loadBalancer:
         servers:
-            - url: "{{ caddy_url }}"
-          passHostHeader: true
+          - url: "{{ caddy_url }}"
+        passHostHeader: true
 
 
 {% for app in apps %}
     {{ app.name }}-svc:
       loadBalancer:
         servers:
-            - url: "{{ app.service_url }}"
-          passHostHeader: true
+          - url: "{{ app.service_url }}"
+        passHostHeader: true
 {% endfor %}
