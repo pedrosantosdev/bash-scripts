@@ -28,8 +28,3 @@
         owner: root
         group: root
         mode: "0644"
-
-
-    - name: Validate Traefik config (opcional)
-      command: traefik check-config
-      ignore_errors: yes
