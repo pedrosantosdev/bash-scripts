@@ -1,0 +1,97 @@
+---
+- name: Install and configure Grafana Alloy
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    alloy_install_script_url: "https://raw.githubusercontent.com/pedrosantosdev/bash-scripts/refs/heads/main/install/alloy.bash"
+    alloy_install_script: "/tmp/install_alloy.bash"
+    # Definir no inventário do Semaphore ou como Extra Variable.
+    loki_url: "http://LOKI_IP:3100/loki/api/v1/push"
+    alloy_config: "/etc/alloy/config.alloy"
+
+  tasks:
+
+    - name: Download Alloy installation script
+      ansible.builtin.get_url:
+        url: "{{ alloy_install_script_url }}"
+        dest: "{{ alloy_install_script }}"
+        mode: "0700"
+        force: true
+
+    - name: Execute Alloy installation script
+      ansible.builtin.command:
+        cmd: "{{ alloy_install_script }}"
+      register: alloy_install
+      changed_when: true
+
+    - name: Remove installation script
+      ansible.builtin.file:
+        path: "{{ alloy_install_script }}"
+        state: absent
+
+    - name: Add alloy user to journal groups
+      ansible.builtin.user:
+        name: alloy
+        groups:
+          - adm
+          - systemd-journal
+        append: true
+
+    - name: Configure Alloy
+      ansible.builtin.copy:
+        dest: "{{ alloy_config }}"
+        owner: root
+        group: alloy
+        mode: "0640"
+        content: |
+          loki.relabel "journal" {
+            forward_to = []
+
+            rule {
+              source_labels = ["__journal__systemd_unit"]
+              target_label  = "unit"
+            }
+          }
+
+          loki.source.journal "read" {
+            max_age       = "1h"
+            relabel_rules = loki.relabel.journal.rules
+            forward_to    = [loki.write.default.receiver]
+
+            labels = {
+              host = "{{ ansible_hostname }}",
+              job  = "systemd-journal",
+            }
+          }
+
+          loki.write "default" {
+            endpoint {
+              url = "{{ loki_url }}"
+            }
+          }
+      notify: Restart Alloy
+
+    - name: Validate Alloy configuration
+      ansible.builtin.command:
+        cmd: alloy validate "{{ alloy_config }}"
+      changed_when: false
+
+    - name: Ensure Alloy is enabled
+      ansible.builtin.systemd:
+        name: alloy
+        enabled: true
+        daemon_reload: true
+
+    - name: Ensure Alloy is running
+      ansible.builtin.systemd:
+        name: alloy
+        state: started
+
+  handlers:
+
+    - name: Restart Alloy
+      ansible.builtin.systemd:
+        name: alloy
+        state: restarted
